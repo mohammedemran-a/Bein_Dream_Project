@@ -15,8 +15,9 @@ import BottomNav from "@/components/layout/BottomNav";
 import { ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "@/contexts/CartContext";
-import { getProducts, Product } from "@/api/products.ts";
+import { getProducts, Product } from "@/api/products";
 import { useAuthStore } from "@/store/useAuthStore";
+import { BASE_URL } from "@/api/axios";
 
 // -------------------------
 // بطاقة الخدمة
@@ -32,8 +33,14 @@ const ServiceCard = ({
 
   return (
     <Card className="overflow-hidden hover-lift card-gradient border-2">
-      {/* ✅ هذا الـ div كان ناقص الإغلاق */}
-      <div className="h-48 overflow-hidden"></div>
+      {/* صورة المنتج من storage */}
+      <div className="h-48 overflow-hidden">
+        <img
+          src={`${BASE_URL}/storage/${item.image}`}
+          alt={item.name}
+          className="w-full h-full object-cover"
+        />
+      </div>
 
       <CardHeader>
         <CardTitle>{item.name}</CardTitle>
@@ -160,7 +167,7 @@ const Services = () => {
                               image: item.image || "",
                               userId: user?.id,
                             }}
-                            addToCart={(product, quantity, userId) =>
+                            addToCart={(product, quantity) =>
                               addItem(
                                 {
                                   id: product.id,

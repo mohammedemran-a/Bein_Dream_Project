@@ -6,13 +6,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getProducts, createProduct, updateProduct, deleteProduct, Product } from "@/api/products.ts";
+import {
+  getProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  Product,
+} from "@/api/products";
 import { BASE_URL } from "@/api/axios";
 
 const categories = ["البقالة", "القات", "الشيشة", "الكروت", "القهوة"];
@@ -23,6 +43,7 @@ const AdminServices = () => {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
   const [form, setForm] = useState({
     type: "البقالة",
     name: "",
@@ -32,18 +53,18 @@ const AdminServices = () => {
     image: null as File | null,
   });
 
-  // -------------------------
+  // =============================
   // جلب المنتجات
-  // -------------------------
+  // =============================
   const { data: products = [], isLoading, isFetching } = useQuery({
     queryKey: ["products"],
     queryFn: getProducts,
     enabled: hasPermission("services_view"),
   });
 
-  // -------------------------
-  // حفظ أو تعديل المنتج
-  // -------------------------
+  // =============================
+  // حفظ / تعديل
+  // =============================
   const saveMutation = useMutation({
     mutationFn: async () => {
       const formData = new FormData();
@@ -57,11 +78,9 @@ const AdminServices = () => {
         }
       });
 
-      if (editingProduct) {
-        return updateProduct(editingProduct.id, formData);
-      } else {
-        return createProduct(formData);
-      }
+      return editingProduct
+        ? updateProduct(editingProduct.id, formData)
+        : createProduct(formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -71,18 +90,22 @@ const AdminServices = () => {
     },
   });
 
-  // -------------------------
-  // حذف المنتج
-  // -------------------------
+  // =============================
+  // حذف
+  // =============================
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteProduct(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products"] })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["products"] }),
   });
 
-  // -------------------------
-  // التعامل مع الفورم
-  // -------------------------
-  const updateFormField = (key: keyof typeof form, value: string | File | null) => {
+  // =============================
+  // أدوات الفورم
+  // =============================
+  const updateFormField = (
+    key: keyof typeof form,
+    value: string | File | null
+  ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -98,7 +121,11 @@ const AdminServices = () => {
   };
 
   const handleEdit = (product: Product) => {
-    if (!hasPermission("services_edit")) return alert("🚫 ليس لديك صلاحية التعديل!");
+    if (!hasPermission("services_edit")) {
+      alert("🚫 ليس لديك صلاحية التعديل!");
+      return;
+    }
+
     setEditingProduct(product);
     setForm({
       type: product.type,
@@ -112,28 +139,33 @@ const AdminServices = () => {
   };
 
   const handleDelete = (id: number) => {
-    if (!hasPermission("services_delete")) return alert("🚫 ليس لديك صلاحية الحذف!");
+    if (!hasPermission("services_delete")) {
+      alert("🚫 ليس لديك صلاحية الحذف!");
+      return;
+    }
+
     if (confirm("هل أنت متأكد من حذف هذا المنتج؟")) {
       deleteMutation.mutate(id);
     }
   };
 
-  // -------------------------
+  // =============================
   // جدول المنتجات
-  // -------------------------
+  // =============================
   const ProductsTable = ({ type }: { type: string }) => {
-    const filtered = Array.isArray(products) ? products.filter((p) => p.type === type) : [];
+    const filtered = Array.isArray(products)
+      ? products.filter((p) => p.type === type)
+      : [];
 
     return (
       <div dir="rtl" className="overflow-x-auto">
-        {/* مؤشر تحديث أثناء أي Fetch لاحق */}
         {isFetching && !isLoading && (
           <p className="text-right text-gray-400 text-sm mb-2 animate-pulse">
             جارٍ تحديث البيانات...
           </p>
         )}
 
-        <Table className="min-w-full border-collapse text-center">
+        <Table className="min-w-full text-center">
           <TableHeader>
             <TableRow>
               <TableHead className="text-center w-[150px]">الصورة</TableHead>
@@ -144,16 +176,13 @@ const AdminServices = () => {
               <TableHead className="text-center w-[150px]">العمليات</TableHead>
             </TableRow>
           </TableHeader>
+
           <TableBody>
             {filtered.map((product) => (
               <TableRow key={product.id}>
                 <TableCell>
                   <img
-                    src={
-                      product.image?.startsWith("http")
-                        ? product.image
-                        : `${BASE_URL}/storage/${product.image}`
-                    }
+                    src={`${BASE_URL}/storage/${product.image}`}
                     alt={product.name}
                     className="w-16 h-16 object-cover rounded border"
                   />
@@ -167,12 +196,21 @@ const AdminServices = () => {
                 <TableCell>
                   <div className="flex gap-2 justify-end">
                     {hasPermission("services_edit") && (
-                      <Button size="sm" variant="ghost" onClick={() => handleEdit(product)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEdit(product)}
+                      >
                         <Pencil className="w-4 h-4" />
                       </Button>
                     )}
                     {hasPermission("services_delete") && (
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(product.id)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => handleDelete(product.id)}
+                      >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
@@ -180,9 +218,10 @@ const AdminServices = () => {
                 </TableCell>
               </TableRow>
             ))}
+
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                <TableCell colSpan={6} className="py-6 text-gray-500">
                   لا توجد منتجات في هذا التصنيف
                 </TableCell>
               </TableRow>
@@ -193,9 +232,9 @@ const AdminServices = () => {
     );
   };
 
-  // -------------------------
-  // صلاحية عرض الصفحة
-  // -------------------------
+  // =============================
+  // صلاحيات
+  // =============================
   if (!hasPermission("services_view")) {
     return (
       <AdminLayout>
@@ -206,51 +245,49 @@ const AdminServices = () => {
     );
   }
 
-  // -------------------------
-  // Loading أول مرة فقط
-  // -------------------------
   if (isLoading) {
     return (
       <AdminLayout>
-        <p className="text-center text-gray-500 mt-10">جارٍ تحميل المنتجات...</p>
+        <p className="text-center text-gray-500 mt-10">
+          جارٍ تحميل المنتجات...
+        </p>
       </AdminLayout>
     );
   }
 
-  // -------------------------
-  // الواجهة الرئيسية
-  // -------------------------
+  // =============================
+  // الواجهة
+  // =============================
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* عنوان + زر إضافة */}
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">إدارة المنتجات</h1>
 
-          {(hasPermission("services_create") || hasPermission("services_edit")) && (
+          {hasPermission("services_create") && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                {hasPermission("services_create") && (
-                  <Button
-                    className="gap-2"
-                    onClick={() => {
-                      resetForm();
-                      setEditingProduct(null);
-                    }}
-                  >
-                    <Plus className="w-4 h-4" />
-                    إضافة منتج جديد
-                  </Button>
-                )}
+                <Button
+                  className="gap-2"
+                  onClick={() => {
+                    resetForm();
+                    setEditingProduct(null);
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                  إضافة منتج جديد
+                </Button>
               </DialogTrigger>
 
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
-                  <DialogTitle>{editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle>
+                  <DialogTitle>
+                    {editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}
+                  </DialogTitle>
                   <DialogDescription>
                     {editingProduct
-                      ? "قم بتعديل بيانات المنتج الحالية ثم اضغط تحديث."
-                      : "املأ بيانات المنتج الجديد ثم اضغط حفظ."}
+                      ? "قم بتعديل بيانات المنتج ثم اضغط تحديث."
+                      : "املأ بيانات المنتج ثم اضغط حفظ."}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -266,7 +303,9 @@ const AdminServices = () => {
                     <select
                       className="w-full border rounded-md p-2"
                       value={form.type}
-                      onChange={(e) => updateFormField("type", e.target.value)}
+                      onChange={(e) =>
+                        updateFormField("type", e.target.value)
+                      }
                     >
                       {categories.map((cat) => (
                         <option key={cat} value={cat}>
@@ -277,47 +316,82 @@ const AdminServices = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="name">اسم المنتج</Label>
-                    <Input id="name" value={form.name} onChange={(e) => updateFormField("name", e.target.value)} required />
+                    <Label>اسم المنتج</Label>
+                    <Input
+                      value={form.name}
+                      onChange={(e) =>
+                        updateFormField("name", e.target.value)
+                      }
+                      required
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="price">السعر (ريال)</Label>
-                      <Input id="price" type="number" value={form.price} onChange={(e) => updateFormField("price", e.target.value)} required />
+                      <Label>السعر</Label>
+                      <Input
+                        type="number"
+                        value={form.price}
+                        onChange={(e) =>
+                          updateFormField("price", e.target.value)
+                        }
+                        required
+                      />
                     </div>
                     <div>
-                      <Label htmlFor="stock">الكمية</Label>
-                      <Input id="stock" type="number" value={form.stock} onChange={(e) => updateFormField("stock", e.target.value)} />
+                      <Label>الكمية</Label>
+                      <Input
+                        type="number"
+                        value={form.stock}
+                        onChange={(e) =>
+                          updateFormField("stock", e.target.value)
+                        }
+                      />
                     </div>
                   </div>
 
                   <div>
-                    <Label htmlFor="category">الفئة</Label>
-                    <Input id="category" value={form.category} onChange={(e) => updateFormField("category", e.target.value)} />
+                    <Label>الفئة</Label>
+                    <Input
+                      value={form.category}
+                      onChange={(e) =>
+                        updateFormField("category", e.target.value)
+                      }
+                    />
                   </div>
 
                   <div>
-                    <Label htmlFor="image">صورة المنتج</Label>
-                    <Input id="image" type="file" accept="image/*" onChange={(e) => updateFormField("image", e.target.files?.[0] ?? null)} />
+                    <Label>صورة المنتج</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        updateFormField(
+                          "image",
+                          e.target.files?.[0] ?? null
+                        )
+                      }
+                    />
+
                     {editingProduct?.image && (
                       <img
-                        src={
-                          editingProduct.image.startsWith("http")
-                            ? editingProduct.image
-                            : `${BASE_URL}/storage/${editingProduct.image}`
-                        }
-                        alt="Current"
-                        className="w-24 h-24 object-cover mt-2 rounded"
+                        src={`${BASE_URL}/storage/${editingProduct.image}`}
+                        className="w-24 h-24 object-cover rounded mt-2"
                       />
                     )}
                   </div>
 
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
                       إلغاء
                     </Button>
-                    <Button type="submit">{editingProduct ? "تحديث" : "حفظ"}</Button>
+                    <Button type="submit">
+                      {editingProduct ? "تحديث" : "حفظ"}
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
@@ -325,7 +399,6 @@ const AdminServices = () => {
           )}
         </div>
 
-        {/* التبويبات */}
         <div dir="rtl">
           <Tabs defaultValue="البقالة">
             <TabsList className="grid grid-cols-5">

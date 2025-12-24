@@ -6,29 +6,44 @@ use App\Http\Controllers\Controller;
 use App\Models\Room;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-    
+use Illuminate\Support\Facades\Cache;
+
 class RoomController extends Controller
 {
     /**
-     * جلب جميع الغرف
+     * 🟢 جلب جميع الغرف (مع كاش)
      */
     public function index()
     {
-        $rooms = Room::all(); // الحقل remaining_capacity يظهر تلقائياً من الـ Model
+        $rooms = Cache::remember('rooms.all', now()->addMinutes(10), function () {
+            return Room::withSum(
+                ['bookings as bookings_sum_guests' => function ($q) {
+                    $q->whereNotIn('status', ['ملغى', 'منتهي']);
+                }],
+                'guests'
+            )->get();
+        });
+
         return response()->json($rooms);
     }
 
     /**
-     * جلب غرفة واحدة حسب الـ ID
+     * 🟢 جلب غرفة واحدة
      */
     public function show($id)
     {
-        $room = Room::findOrFail($id); // الحقل remaining_capacity يظهر تلقائياً
+        $room = Room::withSum(
+            ['bookings as bookings_sum_guests' => function ($q) {
+                $q->whereNotIn('status', ['ملغى', 'منتهي']);
+            }],
+            'guests'
+        )->findOrFail($id);
+
         return response()->json($room);
     }
 
     /**
-     * إنشاء غرفة جديدة
+     * 🆕 إنشاء غرفة
      */
     public function store(Request $request)
     {
@@ -44,17 +59,20 @@ class RoomController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('rooms', 'public');
-            $validated['image_path'] = $path;
+            $validated['image_path'] =
+                $request->file('image')->store('rooms', 'public');
         }
 
         $room = Room::create($validated);
+
+        // 🔥 تفريغ الكاش
+        Cache::forget('rooms.all');
 
         return response()->json($room, 201);
     }
 
     /**
-     * تحديث غرفة موجودة
+     * ✏️ تحديث غرفة
      */
     public function update(Request $request, $id)
     {
@@ -72,31 +90,38 @@ class RoomController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            if ($room->image_path && Storage::disk('public')->exists($room->image_path)) {
+            if ($room->image_path) {
                 Storage::disk('public')->delete($room->image_path);
             }
-            $path = $request->file('image')->store('rooms', 'public');
-            $validated['image_path'] = $path;
+
+            $validated['image_path'] =
+                $request->file('image')->store('rooms', 'public');
         }
 
         $room->update($validated);
+
+        // 🔥 تفريغ الكاش
+        Cache::forget('rooms.all');
 
         return response()->json($room);
     }
 
     /**
-     * حذف غرفة
+     * 🔴 حذف غرفة
      */
     public function destroy($id)
     {
         $room = Room::findOrFail($id);
 
-        if ($room->image_path && Storage::disk('public')->exists($room->image_path)) {
+        if ($room->image_path) {
             Storage::disk('public')->delete($room->image_path);
         }
 
         $room->delete();
 
-        return response()->json(['message' => 'Room deleted successfully']);
+        // 🔥 تفريغ الكاش
+        Cache::forget('rooms.all');
+
+        return response()->json(['message' => 'تم حذف الغرفة بنجاح']);
     }
 }

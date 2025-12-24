@@ -22,27 +22,23 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        // التحقق من البيانات المرسلة
         $request->validate([
             'type' => 'required|string',
             'name' => 'required|string',
             'price' => 'required|numeric',
             'stock' => 'required|integer',
             'category' => 'required|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:10240', // 10 MB
+            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:10240',
         ]);
 
         $data = $request->all();
 
-        // ✅ رفع الصورة إذا تم إرسالها
+        // ✅ حفظ الصورة (المسار فقط)
         if ($request->hasFile('image')) {
-            // حفظ الصورة داخل storage/app/public/products
             $path = $request->file('image')->store('products', 'public');
-            // حفظ الرابط الكامل داخل قاعدة البيانات
-            $data['image'] = asset('storage/' . $path);
+            $data['image'] = $path; // products/xxx.jpg
         }
 
-        // إنشاء المنتج
         $product = Product::create($data);
 
         return response()->json($product, 201);
@@ -57,7 +53,7 @@ class ProductController extends Controller
     }
 
     /**
-     * تحديث منتج موجود
+     * تحديث منتج
      */
     public function update(Request $request, Product $product)
     {
@@ -67,21 +63,19 @@ class ProductController extends Controller
             'price' => 'sometimes|numeric',
             'stock' => 'sometimes|integer',
             'category' => 'sometimes|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:10240', // 10 MB
+            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:10240',
         ]);
 
         $data = $request->all();
 
-        // ✅ في حالة رفع صورة جديدة
         if ($request->hasFile('image')) {
-            // حذف الصورة القديمة إن وُجدت
+            // حذف الصورة القديمة
             if ($product->image) {
-                $oldPath = str_replace(asset('storage') . '/', '', $product->image);
-                Storage::disk('public')->delete($oldPath);
+                Storage::disk('public')->delete($product->image);
             }
 
             $path = $request->file('image')->store('products', 'public');
-            $data['image'] = asset('storage/' . $path);
+            $data['image'] = $path;
         }
 
         $product->update($data);
@@ -94,10 +88,8 @@ class ProductController extends Controller
      */
     public function destroy(Product $product)
     {
-        // حذف الصورة من السيرفر إذا وُجدت
         if ($product->image) {
-            $oldPath = str_replace(asset('storage') . '/', '', $product->image);
-            Storage::disk('public')->delete($oldPath);
+            Storage::disk('public')->delete($product->image);
         }
 
         $product->delete();

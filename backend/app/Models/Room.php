@@ -9,10 +9,17 @@ class Room extends Model
     protected $table = 'rooms';
 
     protected $fillable = [
-        'category', 'name', 'price', 'status', 'capacity', 'description', 'features', 'image_path'
+        'category',
+        'name',
+        'price',
+        'status',
+        'capacity',
+        'description',
+        'features',
+        'image_path',
     ];
 
-    // إضافة الحقل المحسوب تلقائياً عند التحويل إلى JSON
+    // إظهار الحقل المحسوب
     protected $appends = ['remaining_capacity'];
 
     public function bookings()
@@ -20,13 +27,12 @@ class Room extends Model
         return $this->hasMany(Booking::class);
     }
 
-    // الحقل المحسوب
+    /**
+     * ✅ حساب السعة المتبقية بدون استعلام إضافي
+     */
     public function getRemainingCapacityAttribute()
     {
-        $activeGuests = $this->bookings()
-                             ->whereNotIn('status', ['ملغى', 'منتهي'])
-                             ->sum('guests');
-
-        return max($this->capacity - $activeGuests, 0);
+        $bookedGuests = $this->bookings_sum_guests ?? 0;
+        return max($this->capacity - $bookedGuests, 0);
     }
 }
