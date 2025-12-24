@@ -6,46 +6,55 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
 class ProductController extends Controller
 {
     /**
-     * عرض جميع المنتجات
+     * 🟢 عرض جميع المنتجات (كاش فقط)
      */
     public function index()
     {
-        return response()->json(Product::all());
+        $products = Cache::remember(
+            'products.all',
+            now()->addMinutes(10),
+            function () {
+                return Product::all();
+            }
+        );
+
+        return response()->json($products);
     }
 
     /**
-     * إضافة منتج جديد
+     * 🟢 إضافة منتج
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'type' => 'required|string',
-            'name' => 'required|string',
-            'price' => 'required|numeric',
-            'stock' => 'required|integer',
+        $validated = $request->validate([
+            'type'     => 'required|string',
+            'name'     => 'required|string',
+            'price'    => 'required|numeric',
+            'stock'    => 'required|integer',
             'category' => 'required|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:10240',
+            'image'    => 'nullable|image|mimes:jpeg,png,jpg|max:10240',
         ]);
 
-        $data = $request->all();
-
-        // ✅ حفظ الصورة (المسار فقط)
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
-            $data['image'] = $path; // products/xxx.jpg
+            // ⛔ نفس المسار تمامًا كما كان
+            $validated['image'] = $request->file('image')->store('products', 'public');
         }
 
-        $product = Product::create($data);
+        $product = Product::create($validated);
+
+        // 🔥 تفريغ الكاش بعد الإضافة
+        Cache::forget('products.all');
 
         return response()->json($product, 201);
     }
 
     /**
-     * عرض منتج محدد
+     * 🟢 عرض منتج واحد
      */
     public function show(Product $product)
     {
@@ -53,38 +62,39 @@ class ProductController extends Controller
     }
 
     /**
-     * تحديث منتج
+     * 🟡 تحديث منتج
      */
     public function update(Request $request, Product $product)
     {
-        $request->validate([
-            'type' => 'sometimes|string',
-            'name' => 'sometimes|string',
-            'price' => 'sometimes|numeric',
-            'stock' => 'sometimes|integer',
+        $validated = $request->validate([
+            'type'     => 'sometimes|string',
+            'name'     => 'sometimes|string',
+            'price'    => 'sometimes|numeric',
+            'stock'    => 'sometimes|integer',
             'category' => 'sometimes|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:10240',
+            'image'    => 'nullable|image|mimes:jpeg,png,jpg|max:10240',
         ]);
 
-        $data = $request->all();
-
         if ($request->hasFile('image')) {
-            // حذف الصورة القديمة
+            // حذف القديمة فقط
             if ($product->image) {
                 Storage::disk('public')->delete($product->image);
             }
 
-            $path = $request->file('image')->store('products', 'public');
-            $data['image'] = $path;
+            // نفس المسار القديم
+            $validated['image'] = $request->file('image')->store('products', 'public');
         }
 
-        $product->update($data);
+        $product->update($validated);
+
+        // 🔥 تفريغ الكاش بعد التحديث
+        Cache::forget('products.all');
 
         return response()->json($product);
     }
 
     /**
-     * حذف منتج
+     * 🔴 حذف منتج
      */
     public function destroy(Product $product)
     {
@@ -93,6 +103,9 @@ class ProductController extends Controller
         }
 
         $product->delete();
+
+        // 🔥 تفريغ الكاش بعد الحذف
+        Cache::forget('products.all');
 
         return response()->json(null, 204);
     }
