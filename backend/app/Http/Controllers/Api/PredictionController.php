@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Prediction;
+use App\Models\FootballMatch;
 use Illuminate\Http\Request;
 
 class PredictionController extends Controller
 {
     /**
-     * 🟢 حفظ توقع جديد
+     * 🟢 حفظ أو تحديث توقع
      */
     public function store(Request $request)
     {
@@ -20,18 +21,35 @@ class PredictionController extends Controller
             'team2_score' => 'required|integer|min:0',
         ]);
 
+        // 🔍 جلب المباراة
+        $match = FootballMatch::findOrFail($validated['football_match_id']);
+
+        /**
+         * ⛔ منع التوقع إذا:
+         * - الحالة ليست "قادمة"
+         */
+        if ($match->status !== 'قادمة') {
+            return response()->json([
+                'message' => '❌ انتهى وقت إرسال التوقعات لهذه المباراة'
+            ], 403);
+        }
+
+        // 🔁 التحقق من وجود توقع سابق
         $existing = Prediction::where('user_id', $validated['user_id'])
             ->where('football_match_id', $validated['football_match_id'])
             ->first();
 
+        // ✏️ تحديث التوقع
         if ($existing) {
             $existing->update($validated);
+
             return response()->json([
                 'message' => 'تم تحديث التوقع بنجاح ✅',
                 'data' => $existing
             ]);
         }
 
+        // 🆕 إنشاء توقع جديد
         $prediction = Prediction::create($validated);
 
         return response()->json([

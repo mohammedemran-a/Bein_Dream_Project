@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent } from "react";
+import { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
@@ -148,6 +148,34 @@ export default function AdminMatches() {
     deleteMutation.mutate(id);
   };
 
+  // 🔄 تحديث الحالة تلقائيًا بناءً على الوقت
+  const getUpdatedStatus = (match: Match) => {
+    const [hours, minutes] = match.time.split(":");
+    const matchStart = new Date(match.date);
+    matchStart.setHours(Number(hours), Number(minutes), 0, 0);
+    const matchEnd = new Date(matchStart.getTime() + 100 * 60000); // 100 دقيقة تقريبًا
+    const now = new Date();
+
+    if (now >= matchEnd) return "منتهية" as const;
+    else if (now >= matchStart) return "جارية" as const;
+    return "قادمة" as const;
+  };
+
+  const [matchesState, setMatchesState] = useState<Match[]>([]);
+
+  useEffect(() => {
+    if (data) setMatchesState(data);
+  }, [data]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMatchesState((prev) =>
+        prev.map((match) => ({ ...match, status: getUpdatedStatus(match) }))
+      );
+    }, 60000); // تحديث كل دقيقة
+    return () => clearInterval(interval);
+  }, []);
+
   if (!hasPermission("matches_view")) {
     return (
       <AdminLayout>
@@ -173,8 +201,6 @@ export default function AdminMatches() {
       </AdminLayout>
     );
   }
-
-  const matchesList: Match[] = data || [];
 
   return (
     <AdminLayout>
@@ -300,7 +326,7 @@ export default function AdminMatches() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {matchesList.map((match) => (
+                {matchesState.map((match) => (
                   <TableRow key={match.id}>
                     <TableCell>{match.team1}</TableCell>
                     <TableCell>

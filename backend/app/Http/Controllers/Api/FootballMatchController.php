@@ -7,15 +7,33 @@ use App\Models\FootballMatch;
 use App\Models\Prediction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class FootballMatchController extends Controller
 {
+    protected $timezone = 'Asia/Riyadh'; // ضبط التوقيت المحلي
+
     /**
-     * 🟢 عرض جميع المباريات
+     * 🟢 عرض جميع المباريات وتحديث الحالة تلقائيًا
      */
     public function index()
     {
+        $now = Carbon::now($this->timezone);
+
         $matches = FootballMatch::orderBy('date', 'asc')->get();
+
+        foreach ($matches as $match) {
+            $matchStart = Carbon::parse($match->date . ' ' . $match->time, $this->timezone);
+            $matchEnd = $matchStart->copy()->addMinutes(100); // مدة المباراة تقريبية
+
+            // تحديث الحالة تلقائيًا
+            if ($match->status === 'قادمة' && $now->gte($matchStart) && $now->lt($matchEnd)) {
+                $match->update(['status' => 'جارية']);
+            } elseif ($match->status !== 'منتهية' && $now->gte($matchEnd)) {
+                $match->update(['status' => 'منتهية']);
+            }
+        }
+
         return response()->json($matches);
     }
 
@@ -34,15 +52,15 @@ class FootballMatchController extends Controller
             'channel'     => 'required|string|max:255',
             'result'      => 'nullable|string|max:255',
             'status'      => 'required|in:قادمة,منتهية,جارية',
-
         ]);
 
-        // 🆕 تخزين الشعار الأول
+        // ضبط الوقت بشكل صحيح
+        $validated['time'] = date('H:i:s', strtotime($validated['time']));
+
         if ($request->hasFile('team1_logo')) {
             $validated['team1_logo'] = $request->file('team1_logo')->store('logos', 'public');
         }
 
-        // 🆕 تخزين الشعار الثاني
         if ($request->hasFile('team2_logo')) {
             $validated['team2_logo'] = $request->file('team2_logo')->store('logos', 'public');
         }
@@ -65,7 +83,7 @@ class FootballMatchController extends Controller
     }
 
     /**
-     * ✏️ تحديث مباراة + تحديث الشعارات
+     * ✏️ تحديث مباراة + تحديث الشعارات + تحديث الحالة
      */
     public function update(Request $request, $id)
     {
@@ -81,57 +99,58 @@ class FootballMatchController extends Controller
             'channel'     => 'sometimes|string|max:255',
             'result'      => 'nullable|string|max:255',
             'status'      => 'sometimes|in:قادمة,منتهية,جارية',
-
         ]);
 
-        // 🆕 تحديث شعار الفريق الأول
+        if (isset($validated['time'])) {
+            $validated['time'] = date('H:i:s', strtotime($validated['time']));
+        }
+
+        // تحديث الشعارات إذا تم رفعها
         if ($request->hasFile('team1_logo')) {
             if ($match->team1_logo && Storage::disk('public')->exists($match->team1_logo)) {
                 Storage::disk('public')->delete($match->team1_logo);
             }
-
             $validated['team1_logo'] = $request->file('team1_logo')->store('logos', 'public');
         }
 
-        // 🆕 تحديث شعار الفريق الثاني
         if ($request->hasFile('team2_logo')) {
             if ($match->team2_logo && Storage::disk('public')->exists($match->team2_logo)) {
                 Storage::disk('public')->delete($match->team2_logo);
             }
-
             $validated['team2_logo'] = $request->file('team2_logo')->store('logos', 'public');
         }
 
         // تحديث البيانات
         $match->update($validated);
 
-        /**
-         * 🎯 حساب النقاط إذا المباراة انتهت
-         */
-        if ($match->status === 'منتهية' && !empty($match->result)) {
-            if (strpos($match->result, '-') !== false) {
-                [$team1Score, $team2Score] = explode('-', $match->result);
+        // 🔹 تحديث الحالة تلقائيًا
+        $now = Carbon::now($this->timezone);
+        $matchStart = Carbon::parse($match->date . ' ' . $match->time, $this->timezone);
+        $matchEnd = $matchStart->copy()->addMinutes(100);
 
-                $predictions = Prediction::where('football_match_id', $match->id)->get();
+        if ($match->status === 'قادمة' && $now->gte($matchStart) && $now->lt($matchEnd)) {
+            $match->update(['status' => 'جارية']);
+        } elseif ($match->status !== 'منتهية' && $now->gte($matchEnd)) {
+            $match->update(['status' => 'منتهية']);
+        }
 
-                foreach ($predictions as $prediction) {
-                    $points = 0;
+        // 🎯 حساب النقاط إذا انتهت المباراة
+        if ($match->status === 'منتهية' && !empty($match->result) && strpos($match->result, '-') !== false) {
+            [$team1Score, $team2Score] = explode('-', $match->result);
+            $predictions = Prediction::where('football_match_id', $match->id)->get();
 
-                    if (
-                        $prediction->team1_score == $team1Score &&
-                        $prediction->team2_score == $team2Score
-                    ) {
-                        $points = 3;
-                    } elseif (
-                        ($team1Score > $team2Score && $prediction->team1_score > $prediction->team2_score) ||
-                        ($team1Score < $team2Score && $prediction->team1_score < $prediction->team2_score) ||
-                        ($team1Score == $team2Score && $prediction->team1_score == $prediction->team2_score)
-                    ) {
-                        $points = 1;
-                    }
-
-                    $prediction->update(['points' => $points]);
+            foreach ($predictions as $prediction) {
+                $points = 0;
+                if ($prediction->team1_score == $team1Score && $prediction->team2_score == $team2Score) {
+                    $points = 3;
+                } elseif (
+                    ($team1Score > $team2Score && $prediction->team1_score > $prediction->team2_score) ||
+                    ($team1Score < $team2Score && $prediction->team1_score < $prediction->team2_score) ||
+                    ($team1Score == $team2Score && $prediction->team1_score == $prediction->team2_score)
+                ) {
+                    $points = 1;
                 }
+                $prediction->update(['points' => $points]);
             }
         }
 

@@ -1,21 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import BottomNav from "@/components/layout/BottomNav";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner"; // ✅ إضافة toast
+import { toast } from "sonner"; // ✅ toast
 
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Clock, Calendar, Tv } from "lucide-react";
-import { getLeaderboard, getUserPredictions, postPrediction } from "@/api/predictions.ts";
+import {
+  getLeaderboard,
+  getUserPredictions,
+  postPrediction,
+} from "@/api/predictions.ts";
 import { getMatches, Match as API_Match } from "@/api/football_matches.ts";
 import { useAuthStore } from "@/store/useAuthStore";
 import { BASE_URL } from "@/api/axios";
@@ -32,36 +32,40 @@ export type Prediction = {
 export type LeaderboardItem = {
   user_id: number;
   total_points: number;
-  user?: {
-    name: string;
-  };
+  user?: { name: string };
 };
 
 const Matches = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const userId = user?.id ?? null;
-
   const isGuest = !userId;
 
   const [predictions, setPredictions] = useState<Record<number, Prediction>>({});
 
+  // 🟢 جلب المباريات
   const { data: matches = [], isLoading: loadingMatches } = useQuery<Match[]>({
     queryKey: ["matches"],
     queryFn: getMatches,
   });
 
+  // 🟢 جلب توقعات المستخدم
   const { data: userPredictions = [], isLoading: loadingPredictions } = useQuery({
     queryKey: ["userPredictions", userId],
     queryFn: () => getUserPredictions(userId!),
     enabled: !!userId,
   });
 
-  const { data: leaderboard = [], isLoading: loadingLeaderboard } = useQuery<LeaderboardItem[]>({
+  // 🟢 جدول المتصدرين
+  const { data: leaderboard = [], isLoading: loadingLeaderboard } = useQuery<
+    LeaderboardItem[]
+  >({
     queryKey: ["leaderboard"],
     queryFn: getLeaderboard,
   });
 
+  // 🟢 إرسال التوقع
   const predictionMutation = useMutation({
     mutationFn: (data: { matchId: number; team1: number; team2: number }) =>
       postPrediction({
@@ -72,13 +76,14 @@ const Matches = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userPredictions"] });
-      toast.success("تم إرسال التوقع بنجاح 🎉"); // ⭐ نجاح
+      toast.success("تم إرسال التوقع بنجاح 🎉");
     },
     onError: () => {
       toast.error("حدث خطأ أثناء إرسال التوقع ❌");
     },
   });
 
+  // 🟢 تحديث التوقعات عند تغيير المدخلات
   const handlePredictionChange = (
     matchId: number,
     team: "team1" | "team2",
@@ -103,13 +108,15 @@ const Matches = () => {
   };
 
   const handleSubmitPrediction = (matchId: number) => {
-    if (isGuest) return toast.error("🚫 يجب تسجيل الدخول أولاً");
+    if (isGuest) {
+      navigate("/auth");
+      return;
+    }
 
     const prediction = predictions[matchId];
     if (!prediction) return toast.error("❌ لم يتم إدخال أي توقع");
 
-    if (prediction.submitted)
-      return toast.error("تم إرسال هذا التوقع مسبقًا");
+    if (prediction.submitted) return toast.error("تم إرسال هذا التوقع مسبقًا");
 
     if (!prediction.team1 && !prediction.team2) {
       return toast.error("❌ الرجاء إدخال التوقعين قبل الإرسال");
@@ -130,12 +137,21 @@ const Matches = () => {
   const loading =
     loadingMatches || loadingLeaderboard || (userId && loadingPredictions);
 
+  // 🟢 تحديث دوري لكل المباريات كل دقيقة
+  useEffect(() => {
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [queryClient]);
+
   return (
     <div className="min-h-screen">
       <Navbar />
 
       <main className="pt-16">
-        {/* 🏆 مقدمة الصفحة */}
+        {/* مقدمة الصفحة */}
         <section className="bg-gradient-to-b from-primary/10 to-background py-20 px-4">
           <div className="container mx-auto text-center space-y-4 animate-fade-in">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-4">
@@ -149,7 +165,7 @@ const Matches = () => {
           </div>
         </section>
 
-        {/* ⚽ بطاقات المباريات */}
+        {/* بطاقات المباريات */}
         <section className="py-12 px-4">
           <div className="container mx-auto">
             {matches.length === 0 ? (
@@ -170,7 +186,8 @@ const Matches = () => {
                     submitted: !!existingPrediction,
                   };
 
-                  const isSubmitted = prediction.submitted || !!existingPrediction;
+                  const isSubmitted =
+                    prediction.submitted || !!existingPrediction;
 
                   return (
                     <Card
@@ -196,9 +213,7 @@ const Matches = () => {
                             />
                           )}
                           {match.team1}
-
                           <span className="text-primary mx-3">VS</span>
-
                           {match.team2_logo && (
                             <img
                               src={`${BASE_URL}/storage/${match.team2_logo}`}
@@ -256,7 +271,9 @@ const Matches = () => {
                               />
                             </div>
 
-                            <div className="text-2xl font-bold text-primary">-</div>
+                            <div className="text-2xl font-bold text-primary">
+                              -
+                            </div>
 
                             <div className="text-center">
                               {match.team2_logo && (
@@ -289,14 +306,18 @@ const Matches = () => {
 
                           <Button
                             className="w-full mt-3 shadow-elegant"
-                            onClick={() =>
-                              isGuest
-                                ? toast.error("🚫 يرجى تسجيل الدخول أولاً")
-                                : handleSubmitPrediction(match.id!)
+                            onClick={() => handleSubmitPrediction(match.id!)}
+                            disabled={
+                              isSubmitted ||
+                              predictionMutation.isPending ||
+                              match.status !== "قادمة"
                             }
-                            disabled={isSubmitted || predictionMutation.isPending}
                           >
-                            {isSubmitted ? "تم الإرسال" : "إرسال التوقع"}
+                            {match.status !== "قادمة"
+                              ? "انتهى وقت التوقع"
+                              : isSubmitted
+                              ? "تم الإرسال"
+                              : "إرسال التوقع"}
                           </Button>
                         </div>
                       </CardContent>
@@ -308,7 +329,7 @@ const Matches = () => {
           </div>
         </section>
 
-        {/* 🏆 المتصدرين */}
+        {/* جدول المتصدرين */}
         <section className="py-12 px-4 bg-muted/30">
           <div className="container mx-auto">
             <div className="text-center mb-8 animate-fade-in">

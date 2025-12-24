@@ -14,12 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Wifi, Coffee, Tv } from "lucide-react";
 import { getRooms, Room } from "@/api/rooms";
 import { createBooking } from "@/api/bookings";
@@ -42,9 +37,14 @@ const RoomCard = ({ room }: { room: Room }) => {
   const [showModal, setShowModal] = useState(false);
   const [durationType, setDurationType] = useState<"hours" | "days">("days");
   const [durationValue, setDurationValue] = useState<number>(1);
-  const [guests, setGuests] = useState<number>(1);
+
+  // 🔥 مهم: الآن string بدل number
+  const [guests, setGuests] = useState<string>("1");
+
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "wallet">("cash");
-  const [walletType, setWalletType] = useState<"جوالي" | "جيب" | "ون كاش" | null>(null);
+  const [walletType, setWalletType] = useState<
+    "جوالي" | "جيب" | "ون كاش" | null
+  >(null);
   const [walletCode, setWalletCode] = useState("");
 
   const totalPrice =
@@ -62,19 +62,24 @@ const RoomCard = ({ room }: { room: Room }) => {
         throw new Error("User not logged in");
       }
 
-      if (guests <= 0) {
+      const guestsNum = Number(guests);
+
+      if (guestsNum <= 0) {
         toast.error("⚠️ عدد الأشخاص غير صالح");
         return;
       }
 
-      if (guests > room.remaining_capacity) {
-        toast.error(`⚠️ الحد الأقصى للأشخاص المتبقي: ${room.remaining_capacity}`);
+      if (guestsNum > room.remaining_capacity) {
+        toast.error(
+          `⚠️ الحد الأقصى للأشخاص المتبقي: ${room.remaining_capacity}`
+        );
         return;
       }
 
       const now = new Date();
       const checkOut = new Date(now);
-      if (durationType === "hours") checkOut.setHours(now.getHours() + durationValue);
+      if (durationType === "hours")
+        checkOut.setHours(now.getHours() + durationValue);
       else checkOut.setDate(now.getDate() + durationValue);
 
       const bookingData = {
@@ -82,7 +87,10 @@ const RoomCard = ({ room }: { room: Room }) => {
         room_id: room.id,
         check_in: formatDate(now),
         check_out: formatDate(checkOut),
-        guests: guests,
+
+        // 🔥 هنا التحويل الصحيح
+        guests: guestsNum,
+
         total_price: totalPrice,
         status: "قيد المراجعة",
         duration_type: durationType,
@@ -102,7 +110,7 @@ const RoomCard = ({ room }: { room: Room }) => {
       return await createBooking(bookingData);
     },
     onSuccess: () => {
-      toast.success("✅ تم إنشاء الحجز بنجاح!");
+      toast.success(" تم إنشاء الحجز بنجاح!");
       setShowModal(false);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
     },
@@ -162,7 +170,9 @@ const RoomCard = ({ room }: { room: Room }) => {
 
         <CardContent className="space-y-4">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-primary">{room.price}</span>
+            <span className="text-3xl font-bold text-primary">
+              {room.price}
+            </span>
             <span className="text-muted-foreground">
               ريال / {room.capacity > 20 ? "مناسبة" : "ليلة"}
             </span>
@@ -204,7 +214,9 @@ const RoomCard = ({ room }: { room: Room }) => {
                 : ""
             }`}
             onClick={handleOpenModal}
-            disabled={room.remaining_capacity === 0 || bookingMutation.isPending}
+            disabled={
+              room.remaining_capacity === 0 || bookingMutation.isPending
+            }
           >
             {room.remaining_capacity === 0
               ? "محجوزة"
@@ -218,19 +230,25 @@ const RoomCard = ({ room }: { room: Room }) => {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-lg w-full max-w-md relative">
-            <h4 className="text-lg font-bold mb-4">
-              تأكيد الحجز: {room.name}
-            </h4>
+            <h4 className="text-lg font-bold mb-4">تأكيد الحجز: {room.name}</h4>
 
             <div className="space-y-4">
               <div>
-                <Label>عدد الأشخاص (الحد الأقصى: {room.remaining_capacity})</Label>
+                <Label>
+                  عدد الأشخاص (الحد الأقصى: {room.remaining_capacity})
+                </Label>
                 <Input
-                  type="number"
-                  min={1}
-                  max={room.remaining_capacity}
+                  type="text"
                   value={guests}
-                  onChange={(e) => setGuests(Number(e.target.value))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*$/.test(value)) {
+                      const num = Number(value);
+                      if (num <= room.remaining_capacity) {
+                        setGuests(value);
+                      }
+                    }
+                  }}
                 />
               </div>
 
@@ -335,7 +353,13 @@ const RoomCard = ({ room }: { room: Room }) => {
   );
 };
 
-const CategorySection = ({ title, rooms }: { title: string; rooms: Room[] }) => (
+const CategorySection = ({
+  title,
+  rooms,
+}: {
+  title: string;
+  rooms: Room[];
+}) => (
   <>
     <div className="mb-6 p-6 bg-card rounded-lg border">
       <h3 className="text-2xl font-bold mb-2">{title}</h3>
@@ -367,7 +391,9 @@ const Rooms = () => {
   const privateRooms = rooms.filter((r) => r.category === "غرف خاصة");
   const publicRooms = rooms.filter((r) => r.category === "غرف عامة");
   const eventHalls = rooms.filter((r) => r.category === "صالات المناسبات");
-  const playstationRooms = rooms.filter((r) => r.category === "غرف البلايستيشن");
+  const playstationRooms = rooms.filter(
+    (r) => r.category === "غرف البلايستيشن"
+  );
   const billiardRooms = rooms.filter((r) => r.category === "صالات البلياردو");
 
   if (isLoading)
@@ -385,7 +411,8 @@ const Rooms = () => {
           <div className="container mx-auto text-center space-y-4 animate-fade-in">
             <h1 className="text-4xl md:text-6xl font-bold">غرفنا ومرافقنا</h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              اختر من بين مجموعة متنوعة من الغرف والمرافق المجهزة بأفضل الإمكانيات
+              اختر من بين مجموعة متنوعة من الغرف والمرافق المجهزة بأفضل
+              الإمكانيات
             </p>
           </div>
         </section>
@@ -411,10 +438,16 @@ const Rooms = () => {
                 <CategorySection title="صالات المناسبات" rooms={eventHalls} />
               </TabsContent>
               <TabsContent value="playstation">
-                <CategorySection title="غرف البلايستيشن" rooms={playstationRooms} />
+                <CategorySection
+                  title="غرف البلايستيشن"
+                  rooms={playstationRooms}
+                />
               </TabsContent>
               <TabsContent value="billiard">
-                <CategorySection title="صالات البلياردو" rooms={billiardRooms} />
+                <CategorySection
+                  title="صالات البلياردو"
+                  rooms={billiardRooms}
+                />
               </TabsContent>
             </Tabs>
           </div>
