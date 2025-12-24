@@ -33,7 +33,6 @@ import {
   deleteProduct,
   Product,
 } from "@/api/products";
-import { BASE_URL } from "@/api/axios";
 
 const categories = ["البقالة", "القات", "الشيشة", "الكروت", "القهوة"];
 
@@ -181,8 +180,9 @@ const AdminServices = () => {
             {filtered.map((product) => (
               <TableRow key={product.id}>
                 <TableCell>
+                  {/* ✅ هنا نستخدم الرابط كما هو مباشرة */}
                   <img
-                    src={`${BASE_URL}/storage/${product.image}`}
+                    src={product.image}
                     alt={product.name}
                     className="w-16 h-16 object-cover rounded border"
                   />
@@ -375,7 +375,7 @@ const AdminServices = () => {
 
                     {editingProduct?.image && (
                       <img
-                        src={`${BASE_URL}/storage/${editingProduct.image}`}
+                        src={editingProduct.image} // ✅ الرابط مباشرة
                         className="w-24 h-24 object-cover rounded mt-2"
                       />
                     )}

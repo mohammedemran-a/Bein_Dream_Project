@@ -17,7 +17,6 @@ import { toast } from "sonner";
 import { useCart } from "@/contexts/CartContext";
 import { getProducts, Product } from "@/api/products";
 import { useAuthStore } from "@/store/useAuthStore";
-import { BASE_URL } from "@/api/axios";
 
 // -------------------------
 // بطاقة الخدمة
@@ -36,7 +35,7 @@ const ServiceCard = ({
       {/* صورة المنتج من storage */}
       <div className="h-48 overflow-hidden">
         <img
-          src={`${BASE_URL}/storage/${item.image}`}
+          src={item.image} // ✅ تعديل هنا: الرابط مباشرة
           alt={item.name}
           className="w-full h-full object-cover"
         />
@@ -164,7 +163,7 @@ const Services = () => {
                             item={{
                               ...item,
                               price: Number(item.price),
-                              image: item.image || "",
+                              image: item.image || "", // ✅ الرابط مباشرة
                               userId: user?.id,
                             }}
                             addToCart={(product, quantity) =>
@@ -173,7 +172,7 @@ const Services = () => {
                                   id: product.id,
                                   name: product.name,
                                   price: Number(product.price),
-                                  image: product.image || "",
+                                  image: product.image || "", // ✅ الرابط مباشرة
                                   category: product.category,
                                   userId: user?.id,
                                 },
